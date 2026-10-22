@@ -111,3 +111,59 @@ def test_annual_endpoint_params_and_receipt(monkeypatch):
     assert called['params']['fs_div'] == 'CFS'
     assert receipt == '20260301000001'
     assert len(lines) == 1
+
+def test_cloud_connection_error_is_sanitized(monkeypatch):
+    import requests
+    from dart_client import DartError, get_corporations
+    from unittest.mock import patch
+    import pytest
+
+    def broken_request(url, params=None, **kwargs):
+        # requests may embed the key in its raw exception: never show it.
+        raise requests.ConnectionError(f"https://opendart.fss.or.kr/api/corpCode.xml?crtfc_key={params['crtfc_key']}")
+
+    monkeypatch.setattr('dart_client.requests.get', broken_request)
+    with patch('dart_client.time.sleep') as sleep:
+        with pytest.raises(DartError, match="연결 오류") as err:
+            get_corporations('very-private-secret')
+    assert 'very-private-secret' not in str(err.value)
+    assert sleep.call_count == 1
+
+
+def test_cloud_access_forbidden_is_specific_and_no_retry(monkeypatch):
+    import requests
+    from dart_client import DartError, get_corporations
+    import pytest
+
+    calls = []
+    def forbidden_request(url, params=None, **kwargs):
+        calls.append(url)
+        response = requests.Response()
+        response.status_code = 403
+        response.url = url + '?crtfc_key=very-private-secret'
+        return response
+
+    monkeypatch.setattr('dart_client.requests.get', forbidden_request)
+    with pytest.raises(DartError, match="HTTP 403") as err:
+        get_corporations('very-private-secret')
+    assert 'very-private-secret' not in str(err.value)
+    assert len(calls) == 1
+
+
+def test_cloud_timeout_retries_once(monkeypatch):
+    import requests
+    from dart_client import DartError, get_corporations
+    from unittest.mock import patch
+    import pytest
+
+    calls = []
+    def timeouting_request(*args, **kwargs):
+        calls.append(1)
+        raise requests.Timeout("timeout after key=very-private-secret")
+
+    monkeypatch.setattr('dart_client.requests.get', timeouting_request)
+    with patch('dart_client.time.sleep'):
+        with pytest.raises(DartError, match="시간초과") as err:
+            get_corporations('very-private-secret')
+    assert 'very-private-secret' not in str(err.value)
+    assert len(calls) == 2
