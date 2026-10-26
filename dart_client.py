@@ -142,3 +142,22 @@ def get_annual_statement(api_key: str, corp_code: str, year: int, fs_div: str = 
     lines = data.get("list") or []
     rcept_no = next((item.get("rcept_no") for item in lines if item.get("rcept_no")), None)
     return lines, rcept_no
+
+# Verified example; avoids downloading the large corpCode.xml archive.
+KNOWN_COMPANIES = {"삼성전자": ("00126380", "005930"), "005930": ("00126380", "005930")}
+
+
+def lookup_without_registry(query: str) -> dict | None:
+    value = query.strip()
+    if value in KNOWN_COMPANIES:
+        code, stock = KNOWN_COMPANIES[value]
+        return {"corp_code": code, "corp_name": "삼성전자", "stock_code": stock}
+    if len(value) == 8 and value.isascii() and value.isdigit():
+        return {"corp_code": value, "corp_name": f"DART 고유번호 {value}", "stock_code": ""}
+    return None
+
+
+def get_company_profile(api_key: str, corp_code: str) -> dict:
+    return _check_api_json(_request(f"{BASE}/company.json", {
+        "crtfc_key": api_key, "corp_code": corp_code,
+    }))
