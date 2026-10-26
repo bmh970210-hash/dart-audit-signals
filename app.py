@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from analysis import add_ratios, build_financials, detect_flags, flags_as_frame, numeric_summary
-from dart_client import DartError, find_corporations, get_annual_statement, get_corporations
+from dart_client import DartError, find_corporations, get_annual_statement, get_corporations, lookup_without_registry, get_company_profile
 from sample_data import make_sample_annual
 
 @st.cache_data(ttl=24 * 3600, show_spinner=False)
@@ -55,10 +55,10 @@ else:
     selection_label = st.radio("재무제표", ["연결재무제표(CFS)", "별도재무제표(OFS)"], horizontal=True,
                                help="연도별 연결/별도 혼용을 금지합니다. 연결 자료가 없으면 별도로 재조회하세요.")
     selection = "CFS" if selection_label.startswith("연결") else "OFS"
-    st.caption("회사명 두 글자 이상 또는 종목코드 6자리를 입력하세요.")
+    st.caption("삼성전자, 005930 또는 DART 고유번호 8자리를 입력하면 대용량 회사목록 다운로드를 생략합니다. 다른 회사명은 기존 검색을 사용합니다.")
     keyword = st.text_input("회사명 / 종목코드", placeholder="예: 삼성전자 또는 005930")
     companies = pd.DataFrame()
-    if api_key and len(keyword.strip()) >= 2:
+    direct_company = lookup_without_registry(keyword)\n    if api_key and len(keyword.strip()) >= 2 and not direct_company:
         try:
             with st.spinner("금융감독원 회사목록 조회 중..."):
                 companies = cached_corporations(api_key)
@@ -78,7 +78,7 @@ else:
     if st.button("🔎 재무정보 분석 실행", type="primary", disabled=not bool(selected_code)):
         result = {}
         try:
-            with st.spinner("연도별 사업보고서에서 재무제표 수집 중..."):
+            with st.spinner("회사정보 연결 확인 중..."):\n                profile = get_company_profile(api_key, selected_code)\n                company = profile.get("corp_name") or company\n            with st.spinner("연도별 사업보고서에서 재무제표 수집 중..."):
                 for y in range(year - n_years + 1, year + 1):
                     lines, receipt = cached_annual_statement(api_key, selected_code, y, selection)
                     if lines:
