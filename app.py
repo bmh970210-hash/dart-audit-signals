@@ -102,6 +102,7 @@ else:
             st.error(str(exc))
     saved = st.session_state.get("analysis_result", {})
     if saved:
+        st.caption(f"현재 표시 중인 분석: {saved['company']} / {saved['year']}년까지 {saved['period']}개년 / {saved['fs_div']}. 설정을 변경했다면 분석 실행을 다시 누르세요.")
         annual = saved["annual"]
         warnings = saved["warnings"]
         company = saved["company"]
@@ -189,7 +190,7 @@ with st.expander("비율의 의미와 변동 시 감사 검토사항", expanded=
     for label in ratio_cols:
         if label in ratio_guide:
             meaning, risk = ratio_guide[label]
-            st.markdown(f"**{label}** — {meaning}  \\n↳ **확인할 사항:** {risk}")
+            st.markdown(f"**{label}** — {meaning}  \n↳ **확인할 사항:** {risk}")
 if ratio_cols:
     st.dataframe(summary[["연도"] + ratio_cols].style.format(precision=1, thousands=",", na_rep="-"), use_container_width=True, hide_index=True)
     ratio_metric = st.selectbox("추세로 볼 증감률 또는 비율", ratio_cols, key="ratio_metric")
@@ -225,7 +226,7 @@ with st.expander("DART 원본 계정 매핑 확인", expanded=False):
             if str(item["receipt"]).isdigit() and len(str(item["receipt"])) == 14:
                 st.markdown(f"[{int(item['year'])}년 사업보고서 원문](https://dart.fss.or.kr/dsaf001/main.do?rcpNo={item['receipt']})")
 
-st.download_button("📥 5개년 재무지표 CSV", data=summary.to_csv(index=False).encode("utf-8-sig"),
+st.download_button("📥 재무지표 CSV", data=summary.to_csv(index=False).encode("utf-8-sig"),
                    file_name="financial_summary.csv", mime="text/csv")
 if not flag_table.empty:
     st.download_button("📥 감사 이상징후 CSV", data=flag_table.to_csv(index=False).encode("utf-8-sig"),
