@@ -66,6 +66,10 @@ else:
         except DartError as exc:
             st.error(str(exc))
     selected_code = None
+    if direct_company:
+        selected_code = direct_company["corp_code"]
+        company = direct_company["corp_name"]
+        st.success(f"회사 선택: {company} (DART 고유번호 {selected_code})")
     if not companies.empty:
         matches = find_corporations(companies, keyword)
         if matches.empty:
@@ -76,7 +80,7 @@ else:
                 format_func=lambda c: f"{c.corp_name} | 종목코드 {c.stock_code or '-'} | 고유번호 {c.corp_code}")
             selected_code = selected.corp_code
             company = selected.corp_name
-    if st.button("🔎 재무정보 분석 실행", type="primary", disabled=not bool(selected_code)):
+    if st.button("🔎 재무정보 분석 실행", type="primary", disabled=not (bool(selected_code) and bool(api_key.strip()))):
         result = {}
         try:
             with st.spinner("회사정보 연결 확인 중..."):
