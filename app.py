@@ -79,7 +79,10 @@ else:
     if st.button("🔎 재무정보 분석 실행", type="primary", disabled=not bool(selected_code)):
         result = {}
         try:
-            with st.spinner("회사정보 연결 확인 중..."):\n                profile = get_company_profile(api_key, selected_code)\n                company = profile.get("corp_name") or company\n            with st.spinner("연도별 사업보고서에서 재무제표 수집 중..."):
+            with st.spinner("회사정보 연결 확인 중..."):
+                profile = get_company_profile(api_key, selected_code)
+                company = profile.get("corp_name") or company
+            with st.spinner("연도별 사업보고서에서 재무제표 수집 중..."):
                 for y in range(year - n_years + 1, year + 1):
                     lines, receipt = cached_annual_statement(api_key, selected_code, y, selection)
                     if lines:
