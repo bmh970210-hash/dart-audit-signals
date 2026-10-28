@@ -24,7 +24,8 @@ def _request(url: str, params: dict) -> requests.Response:
     Timeout/transient server failures get one retry. Never include the underlying
     requests exception or full URL in UI messages: both may contain crtfc_key.
     """
-    endpoint = "회사목록" if url.endswith("/corpCode.xml") else "재무제표"
+    endpoint = ("회사목록" if url.endswith("/corpCode.xml") else
+                "회사정보" if url.endswith("/company.json") else "재무제표")
     timeout = (CONNECT_TIMEOUT, READ_TIMEOUT if endpoint == "회사목록" else 30)
     for attempt in range(2):
         try:
