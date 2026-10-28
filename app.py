@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 
 import pandas as pd
+import altair as alt
 import streamlit as st
 
 from analysis import add_ratios, build_financials, detect_flags, flags_as_frame, numeric_summary
@@ -147,18 +148,63 @@ for col, key, label in zip(cols, ("revenue", "receivables", "inventory", "cfo"),
                delta_color="off")
 
 st.markdown("### 2. 재무정보 및 증감률")
-st.dataframe(summary.style.format(precision=1, thousands=",", na_rep="-"), use_container_width=True, hide_index=True)
-with st.expander("계정과목별 시계열 그래프", expanded=True):
-    metric_columns = [c for c in ["매출액(억원)", "매출채권(억원)", "재고자산(억원)", "영업이익(억원)", "영업현금흐름(억원)"] if c in summary.columns]
-    if metric_columns:
-        metric = st.selectbox("그래프로 볼 계정과목", metric_columns)
-        chart = summary[["연도", metric]].dropna(subset=[metric]).copy()
-        chart["연도"] = chart["연도"].astype(str)
-        if not chart.empty:
-            st.line_chart(chart.set_index("연도")[[metric]], use_container_width=True)
-            st.dataframe(chart.style.format({metric: "{:,.1f}"}), use_container_width=True, hide_index=True)
-        else:
-            st.info("선택한 계정과목의 금액이 없습니다.")
+amount_cols = [c for c in summary.columns if c.endswith("(억원)")]
+ratio_cols = [c for c in summary.columns if c not in amount_cols and c != "연도"]
+st.markdown("#### 재무금액 (단위: 억원)")
+st.dataframe(summary[["연도"] + amount_cols].style.format(precision=1, thousands=",", na_rep="-"), use_container_width=True, hide_index=True)
+
+st.markdown("#### 계정과목별 시계열 추세")
+if amount_cols:
+    metric = st.selectbox("분석할 계정과목", amount_cols, key="trend_metric")
+    chart = summary[["연도", metric]].dropna(subset=[metric]).copy()
+    chart["연도"] = chart["연도"].astype(str)
+    if not chart.empty:
+        lo, hi = float(chart[metric].min()), float(chart[metric].max())
+        span = hi - lo
+        pad = span * 0.15 if span > 0 else max(abs(hi) * 0.05, 1.0)
+        ymin, ymax = lo - pad, hi + pad
+        plot = alt.Chart(chart).mark_line(point=True, strokeWidth=3).encode(
+            x=alt.X("연도:N", sort=list(chart["연도"]), title="사업연도"),
+            y=alt.Y(f"{metric}:Q", scale=alt.Scale(domain=[ymin, ymax], zero=False),
+                    axis=alt.Axis(format=",.1f"), title=metric),
+            tooltip=[alt.Tooltip("연도:N"), alt.Tooltip(f"{metric}:Q", format=",.1f")]
+        ).properties(height=320)
+        st.altair_chart(plot, use_container_width=True)
+        st.caption(f"세로축은 실제 관측값 {lo:,.1f}~{hi:,.1f}억원에 맞춰 자동 조정됩니다. 축이 0에서 시작하지 않을 수 있으므로 변동폭은 수치와 함께 판단하세요.")
+        st.dataframe(chart.style.format({metric: "{:,.1f}"}), use_container_width=True, hide_index=True)
+    else:
+        st.info("해당 계정과목에 표시할 금액이 없습니다.")
+
+st.markdown("#### 증감률과 주요 비율")
+st.caption("증감률은 직전 사업연도와 비교합니다. 비교할 자료가 없거나 기준 금액이 0 이하이면 표시하지 않습니다.")
+ratio_guide = {
+    "매출 증감률(%)": ("매출액의 전년 대비 변화", "급증 시 기말 매출의 발생사실과 기간귀속, 급감 시 사업환경 변화를 확인"),
+    "매출채권 증감률(%)": ("외상매출금 등 매출채권의 전년 대비 변화", "매출보다 빠르게 늘면 회수가능성, 대손충당금, 매출 실재성을 확인"),
+    "재고 증감률(%)": ("재고자산의 전년 대비 변화", "매출보다 빠르게 늘면 체화재고, 평가손실, 실재성을 확인"),
+    "영업현금흐름 증감률(%)": ("영업활동 현금흐름의 전년 대비 변화", "급감하거나 음수 전환 시 이익의 현금전환과 운전자본 변동을 확인"),
+    "채권÷매출×365(일)": ("기말 매출채권을 연매출로 나눈 회수기간 대용지표", "기간이 길어지면 회수 지연과 채권 평가 위험을 확인. 정식 DSO와 다름"),
+    "재고/매출(%)": ("매출 대비 기말 재고자산의 비중", "비중이 높아지면 판매 부진, 재고 체화, 순실현가능가치 하락을 확인"),
+}
+with st.expander("비율의 의미와 변동 시 감사 검토사항", expanded=True):
+    for label in ratio_cols:
+        if label in ratio_guide:
+            meaning, risk = ratio_guide[label]
+            st.markdown(f"**{label}** — {meaning}  \\n↳ **확인할 사항:** {risk}")
+if ratio_cols:
+    st.dataframe(summary[["연도"] + ratio_cols].style.format(precision=1, thousands=",", na_rep="-"), use_container_width=True, hide_index=True)
+    ratio_metric = st.selectbox("추세로 볼 증감률 또는 비율", ratio_cols, key="ratio_metric")
+    ratio_chart = summary[["연도", ratio_metric]].dropna(subset=[ratio_metric]).copy()
+    ratio_chart["연도"] = ratio_chart["연도"].astype(str)
+    if not ratio_chart.empty:
+        low, high = float(ratio_chart[ratio_metric].min()), float(ratio_chart[ratio_metric].max())
+        margin = (high - low) * 0.15 if high > low else max(abs(high) * 0.05, 1.0)
+        ratio_plot = alt.Chart(ratio_chart).mark_line(point=True, strokeWidth=3).encode(
+            x=alt.X("연도:N", sort=list(ratio_chart["연도"]), title="사업연도"),
+            y=alt.Y(f"{ratio_metric}:Q", scale=alt.Scale(domain=[low-margin, high+margin], zero=False),
+                    axis=alt.Axis(format=",.1f"), title=ratio_metric),
+            tooltip=[alt.Tooltip("연도:N"), alt.Tooltip(f"{ratio_metric}:Q", format=",.1f")]
+        ).properties(height=260)
+        st.altair_chart(ratio_plot, use_container_width=True)
 
 st.markdown("### 3. 이상징후와 감사 대응")
 if flag_table.empty:
