@@ -50,6 +50,10 @@ h1, h2, h3 {letter-spacing: -0.035em; font-weight: 750;}
 [data-testid="stMetric"] [data-testid="stMetricValue"] {font-weight: 800; letter-spacing: -.035em;}
 [data-testid="stMetric"] [data-testid="stMetricDelta"] {opacity: .9;}
 [data-testid="stMetric"] svg {fill: #ffffff !important;}
+.audit-kpi-card {background:linear-gradient(135deg,#7C3AED 0%,#A855F7 58%,#C084FC 100%);color:#fff;padding:20px 18px;border-radius:18px;box-shadow:0 8px 22px rgba(124,58,237,.22);min-height:136px;box-sizing:border-box;overflow-wrap:anywhere;}
+.audit-kpi-label {font-size:.92rem;font-weight:650;opacity:.92;margin-bottom:10px;}
+.audit-kpi-value {font-size:clamp(1.25rem,2vw,1.9rem);font-weight:800;letter-spacing:-.035em;line-height:1.3;color:#fff;}
+.audit-kpi-change {font-size:.83rem;opacity:.92;margin-top:9px;color:#fff;}
 </style>""", unsafe_allow_html=True)
 
 st.title("📊 DART 회계 이상징후 탐지")
@@ -173,9 +177,17 @@ for col, key, label in zip(cols, ("revenue", "receivables", "inventory", "cfo"),
                            ("매출액", "매출채권", "재고자산", "영업현금흐름")):
     current = latest[key]
     growth = latest.get(f"{key}_yoy")
-    col.metric(label, f"{current/1e8:,.0f}억원" if pd.notna(current) else "자료 없음",
-               f"전년 대비 {float(growth):+.1f}%" if pd.notna(growth) else None,
-               delta_color="off")
+    amount_text = f"{current / 1e8:,.0f} 억원" if pd.notna(current) else "자료 없음"
+    change_text = f"전년 대비 {float(growth):+.1f}%" if pd.notna(growth) else "전년 비교 자료 없음"
+    with col:
+        st.markdown(
+            '<div class="audit-kpi-card">'
+            f'<div class="audit-kpi-label">{label}</div>'
+            f'<div class="audit-kpi-value">{amount_text}</div>'
+            f'<div class="audit-kpi-change">{change_text}</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
 st.markdown("### 2. 재무정보 및 증감률")
 amount_cols = [c for c in summary.columns if c.endswith("(억원)")]
