@@ -117,22 +117,32 @@ else:
             company = selected.corp_name
     if st.button("🔎 재무정보 분석 실행", type="primary", disabled=not (bool(selected_code) and bool(api_key.strip()))):
         result = {}
-        try:
-            # Company profile is optional: a valid DART corp_code is enough to fetch statements.
-            # Avoid blocking the entire analysis on an extra network request.
-            with st.spinner("연도별 사업보고서에서 재무제표 수집 중..."):
-                for y in range(year - n_years + 1, year + 1):
-                    lines, receipt = cached_annual_statement(api_key, selected_code, y, selection)
-                    if lines:
-                        result[y] = (lines, receipt)
-                    else:
-                        warnings.append(f"{y}년 {selection} 사업보고서 재무정보 없음 (결측 처리)")
+        errors = []
+        progress = st.progress(0, text="재무제표 수집 준비 중")
+        years = list(range(year - n_years + 1, year + 1))
+        for idx, y in enumerate(years):
+            progress.progress(idx / len(years), text=f"{y}년 사업보고서 조회 중 ({idx + 1}/{len(years)})")
+            try:
+                lines, receipt = cached_annual_statement(api_key.strip(), selected_code, y, selection)
+                if lines:
+                    result[y] = (lines, receipt)
+                else:
+                    warnings.append(f"{y}년 {selection} 사업보고서 재무정보 없음 (결측 처리)")
+            except DartError as exc:
+                errors.append(f"{y}년 조회 실패: {exc}")
+        progress.empty()
+        if errors:
+            st.warning("일부 연도의 DART 요청이 실패했습니다. 실패 연도는 분석에서 제외합니다.")
+            with st.expander("조회 실패 상세", expanded=True):
+                for error in errors:
+                    st.error(error)
+        if result:
             st.session_state["analysis_result"] = {
                 "company": company, "fs_div": selection, "year": year,
-                "period": n_years, "annual": result, "warnings": warnings,
+                "period": n_years, "annual": result, "warnings": warnings + errors,
             }
-        except DartError as exc:
-            st.error(str(exc))
+        else:
+            st.error("모든 연도의 재무제표 조회가 실패하거나 자료가 없습니다. DART 서버 또는 클라우드 연결 상태를 확인하세요.")
     saved = st.session_state.get("analysis_result", {})
     if saved:
         st.caption(f"현재 표시 중인 분석: {saved['company']} / {saved['year']}년까지 {saved['period']}개년 / {saved['fs_div']}. 설정을 변경했다면 분석 실행을 다시 누르세요.")
