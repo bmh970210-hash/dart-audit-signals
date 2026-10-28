@@ -31,11 +31,11 @@ html, body, [class*="css"], [data-testid="stApp"], button, input, select, textar
 .block-container {padding-top: 2rem; max-width: 1200px;}
 h1, h2, h3 {letter-spacing: -0.035em; font-weight: 750;}
 [data-testid="stMetric"] {
-  background: linear-gradient(135deg, #253d92 0%, #5542aa 100%);
+  background: linear-gradient(135deg, #7C3AED 0%, #A855F7 58%, #C084FC 100%);
   border: 1px solid rgba(255,255,255,.18);
   padding: 20px 19px;
   border-radius: 17px;
-  box-shadow: 0 8px 22px rgba(44,57,130,.16);
+  box-shadow: 0 8px 22px rgba(124,58,237,.22);
   min-height: 135px;
 }
 [data-testid="stMetric"] [data-testid="stMetricLabel"],
@@ -174,7 +174,7 @@ for col, key, label in zip(cols, ("revenue", "receivables", "inventory", "cfo"),
                            ("매출액", "매출채권", "재고자산", "영업현금흐름")):
     current = latest[key]
     growth = latest.get(f"{key}_yoy")
-    col.metric(label, f"{current/1e8:,.1f}억원" if pd.notna(current) else "자료 없음",
+    col.metric(label, f"{current/1e8:,.0f}억원" if pd.notna(current) else "자료 없음",
                f"전년 대비 {float(growth):+.1f}%" if pd.notna(growth) else None,
                delta_color="off")
 
