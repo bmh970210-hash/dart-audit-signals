@@ -50,7 +50,7 @@ if not real_mode:
 else:
     st.markdown("#### 1. 회사 검색 및 사업보고서 가져오기")
     api_key = st.text_input("OpenDART API 인증키", type="password", help="입력값은 화면에 표시되지 않고 코드·보고서에 저장되지 않습니다. GitHub에는 절대 올리지 마세요.")
-    year = st.selectbox("마지막 사업연도", list(range(datetime.now().year - 1, 2014, -1)),
+    year = st.selectbox("마지막 사업연도", list(range(min(datetime.now().year - 1, 2025), 2014, -1)),
                         help="예: 2026년 중에는 보통 2025년 사업보고서가 가장 최근입니다.")
     selection_label = st.radio("재무제표", ["연결재무제표(CFS)", "별도재무제표(OFS)"], horizontal=True,
                                help="연도별 연결/별도 혼용을 금지합니다. 연결 자료가 없으면 별도로 재조회하세요.")
@@ -146,11 +146,18 @@ for col, key, label in zip(cols, ("revenue", "receivables", "inventory", "cfo"),
                delta_color="off")
 
 st.markdown("### 2. 재무정보 및 증감률")
-st.dataframe(summary, use_container_width=True, hide_index=True)
-with st.expander("시계열 그래프 보기"):
-    graph = summary.set_index("연도")
-    graph_cols = [c for c in ["매출액(억원)", "매출채권(억원)", "재고자산(억원)", "영업현금흐름(억원)"] if c in graph]
-    st.line_chart(graph[graph_cols])
+st.dataframe(summary.style.format(precision=1, thousands=",", na_rep="-"), use_container_width=True, hide_index=True)
+with st.expander("계정과목별 시계열 그래프", expanded=True):
+    metric_columns = [c for c in ["매출액(억원)", "매출채권(억원)", "재고자산(억원)", "영업이익(억원)", "영업현금흐름(억원)"] if c in summary.columns]
+    if metric_columns:
+        metric = st.selectbox("그래프로 볼 계정과목", metric_columns)
+        chart = summary[["연도", metric]].dropna(subset=[metric]).copy()
+        chart["연도"] = chart["연도"].astype(str)
+        if not chart.empty:
+            st.line_chart(chart.set_index("연도")[[metric]], use_container_width=True)
+            st.dataframe(chart.style.format({metric: "{:,.1f}"}), use_container_width=True, hide_index=True)
+        else:
+            st.info("선택한 계정과목의 금액이 없습니다.")
 
 st.markdown("### 3. 이상징후와 감사 대응")
 if flag_table.empty:
