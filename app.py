@@ -60,12 +60,18 @@ else:
     keyword = st.text_input("회사명 / 종목코드", placeholder="예: 삼성전자 또는 005930")
     companies = pd.DataFrame()
     direct_company = lookup_without_registry(keyword)
-    if api_key and len(keyword.strip()) >= 2 and not direct_company:
-        try:
-            with st.spinner("금융감독원 회사목록 조회 중..."):
-                companies = cached_corporations(api_key)
-        except DartError as exc:
-            st.error(str(exc))
+    if not direct_company and len(keyword.strip()) >= 2:
+        st.caption("일반 회사명은 회사목록 조회 버튼을 눌러 검색합니다. 삼성전자 또는 DART 고유번호 8자리는 바로 선택됩니다.")
+        if st.button("회사목록 검색", key="corp_search"):
+            if not api_key.strip():
+                st.warning("OpenDART 인증키를 먼저 입력하세요.")
+            else:
+                try:
+                    with st.spinner("DART 회사목록 다운로드 중 (최대 약 2분)..."):
+                        st.session_state["corp_registry"] = cached_corporations(api_key.strip())
+                except DartError as exc:
+                    st.error(str(exc))
+        companies = st.session_state.get("corp_registry", pd.DataFrame())
     selected_code = None
     if direct_company:
         selected_code = direct_company["corp_code"]
