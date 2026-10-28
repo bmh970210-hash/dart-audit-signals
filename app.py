@@ -58,7 +58,8 @@ else:
     st.caption("삼성전자, 005930 또는 DART 고유번호 8자리를 입력하면 대용량 회사목록 다운로드를 생략합니다. 다른 회사명은 기존 검색을 사용합니다.")
     keyword = st.text_input("회사명 / 종목코드", placeholder="예: 삼성전자 또는 005930")
     companies = pd.DataFrame()
-    direct_company = lookup_without_registry(keyword)\n    if api_key and len(keyword.strip()) >= 2 and not direct_company:
+    direct_company = lookup_without_registry(keyword)
+    if api_key and len(keyword.strip()) >= 2 and not direct_company:
         try:
             with st.spinner("금융감독원 회사목록 조회 중..."):
                 companies = cached_corporations(api_key)
