@@ -100,10 +100,11 @@ else:
         except DartError as exc:
             st.error(str(exc))
     saved = st.session_state.get("analysis_result", {})
-    if saved and (saved.get("company") == company and saved.get("year") == year
-                  and saved.get("period") == n_years and saved.get("fs_div") == selection):
+    if saved:
         annual = saved["annual"]
         warnings = saved["warnings"]
+        company = saved["company"]
+        selection = saved["fs_div"]
     if not annual:
         st.info("인증키와 회사명을 입력하고, 검색 결과에서 회사를 고른 뒤 **재무정보 분석 실행**을 누르세요.")
         st.stop()
