@@ -24,8 +24,32 @@ def cached_annual_statement(api_key: str, corp_code: str, year: int, fs_div: str
 st.set_page_config(page_title="DART 감사 이상징후 탐지", page_icon="📊", layout="wide")
 
 st.markdown("""<style>
+@import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap');
+html, body, [class*="css"], [data-testid="stApp"], button, input, select, textarea {
+  font-family: 'Pretendard', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
 .block-container {padding-top: 2rem; max-width: 1200px;}
-[data-testid="stMetric"] {background-color: rgba(128,128,128,.065); padding: 14px; border-radius: 10px;}
+h1, h2, h3 {letter-spacing: -0.035em; font-weight: 750;}
+[data-testid="stMetric"] {
+  background: linear-gradient(135deg, #253d92 0%, #5542aa 100%);
+  border: 1px solid rgba(255,255,255,.18);
+  padding: 20px 19px;
+  border-radius: 17px;
+  box-shadow: 0 8px 22px rgba(44,57,130,.16);
+  min-height: 135px;
+}
+[data-testid="stMetric"] [data-testid="stMetricLabel"],
+[data-testid="stMetric"] [data-testid="stMetricValue"],
+[data-testid="stMetric"] [data-testid="stMetricDelta"],
+[data-testid="stMetric"] [data-testid="stMetricLabel"] *,
+[data-testid="stMetric"] [data-testid="stMetricValue"] *,
+[data-testid="stMetric"] [data-testid="stMetricDelta"] * {
+  color: #ffffff !important;
+}
+[data-testid="stMetric"] [data-testid="stMetricLabel"] {opacity: .85; font-weight: 600;}
+[data-testid="stMetric"] [data-testid="stMetricValue"] {font-weight: 800; letter-spacing: -.035em;}
+[data-testid="stMetric"] [data-testid="stMetricDelta"] {opacity: .9;}
+[data-testid="stMetric"] svg {fill: #ffffff !important;}
 </style>""", unsafe_allow_html=True)
 
 st.title("📊 DART 회계 이상징후 탐지")
