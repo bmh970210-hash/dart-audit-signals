@@ -155,7 +155,7 @@ else:
         progress = st.progress(0, text="재무제표 수집 준비 중")
         years = list(range(year - n_years + 1, year + 1))
         started = monotonic()
-        with ThreadPoolExecutor(max_workers=min(5, len(years))) as pool:
+        with ThreadPoolExecutor(max_workers=min(2, len(years))) as pool:
             futures = {
                 pool.submit(cached_annual_statement, api_key.strip(), selected_code, y, selection): y
                 for y in years
@@ -185,7 +185,7 @@ else:
                 "period": n_years, "annual": result, "warnings": warnings + errors,
             }
         else:
-            st.error("모든 연도의 재무제표 조회가 실패하거나 자료가 없습니다. DART 서버 또는 클라우드 연결 상태를 확인하세요.")
+            st.error("모든 연도의 재무제표 요청이 실패했습니다. 일시적인 서버 지연일 수 있으나 클라우드 IP 차단 등 네트워크 문제라면 재시도만으로 해결되지 않습니다.")
     saved = st.session_state.get("analysis_result", {})
     if saved:
         st.caption(f"현재 표시 중인 분석: {saved['company']} / {saved['year']}년까지 {saved['period']}개년 / {saved['fs_div']}. 설정을 변경했다면 분석 실행을 다시 누르세요.")
