@@ -91,35 +91,40 @@ else:
     selection = "CFS" if selection_label.startswith("연결") else "OFS"
     st.caption("삼성전자·005930·DART 고유번호 8자리는 회사목록 다운로드 없이 바로 조회합니다. 일반 회사명은 최초 1회 전체 목록이 필요하며, 이후 캐시를 사용합니다.")
     keyword = st.text_input("회사명 / 종목코드", placeholder="예: 삼성전자 또는 005930")
-    companies = pd.DataFrame()
+    companies = st.session_state.get("corp_registry", pd.DataFrame())
     direct_company = lookup_without_registry(keyword)
-    if not direct_company and len(keyword.strip()) >= 2:
-        st.caption("일반 회사명은 회사목록 조회 버튼을 눌러 검색합니다. 삼성전자 또는 DART 고유번호 8자리는 바로 선택됩니다.")
-        if st.button("회사목록 검색", key="corp_search"):
+    if companies.empty and not direct_company and len(keyword.strip()) >= 2:
+        st.caption("첫 검색 시에만 DART 회사목록을 받아옵니다. 이후에는 이름을 입력할 때마다 유사한 회사 후보가 즉시 표시됩니다.")
+        if st.button("회사목록 최초 불러오기", key="corp_search"):
             if not api_key.strip():
                 st.warning("OpenDART 인증키를 먼저 입력하세요.")
             else:
                 try:
-                    with st.spinner("DART 회사목록 다운로드 중 (최대 약 2분)..."):
-                        st.session_state["corp_registry"] = cached_corporations(api_key.strip())
+                    with st.spinner("회사목록 최초 다운로드 중..."):
+                        companies = cached_corporations(api_key.strip())
+                        st.session_state["corp_registry"] = companies
                 except DartError as exc:
                     st.error(str(exc))
-        companies = st.session_state.get("corp_registry", pd.DataFrame())
     selected_code = None
     if direct_company:
         selected_code = direct_company["corp_code"]
         company = direct_company["corp_name"]
         st.success(f"회사 선택: {company} (DART 고유번호 {selected_code})")
-    if not companies.empty:
-        matches = find_corporations(companies, keyword)
+    elif not companies.empty and len(keyword.strip()) >= 2:
+        matches = find_corporations(companies, keyword, limit=20)
         if matches.empty:
-            st.warning("검색 결과가 없습니다. 정확한 회사명 또는 종목코드를 입력하세요.")
+            st.warning("일치하거나 유사한 회사명이 없습니다. 검색어를 조금 바꿔보세요.")
         else:
             options = list(matches.itertuples(index=False))
-            selected = st.selectbox("회사 선택", options,
-                format_func=lambda c: f"{c.corp_name} | 종목코드 {c.stock_code or '-'} | 고유번호 {c.corp_code}")
-            selected_code = selected.corp_code
-            company = selected.corp_name
+            st.caption(f"검색 후보 {len(options)}개 · 이름이나 종목코드를 입력해 후보를 좁힐 수 있습니다.")
+            selected = st.selectbox("회사 후보에서 선택", options, index=None,
+                placeholder="분석할 회사를 선택하세요",
+                format_func=lambda c: f"{c.corp_name}  ·  종목코드 {c.stock_code or '-'}  ·  DART {c.corp_code}",
+                key="company_suggestion")
+            if selected is not None:
+                selected_code = selected.corp_code
+                company = selected.corp_name
+                st.success(f"선택 완료: {company}")
     if st.button("🔎 재무정보 분석 실행", type="primary", disabled=not (bool(selected_code) and bool(api_key.strip()))):
         result = {}
         errors = []
