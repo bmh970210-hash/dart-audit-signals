@@ -18,6 +18,8 @@ import streamlit as st
 from analysis import add_ratios, build_financials, detect_flags, flags_as_frame, numeric_summary
 from dart_client import DartError, find_corporations, get_annual_statement, get_corporations, lookup_without_registry
 from sample_data import make_sample_annual
+from kam import fetch_kam
+from bs4 import BeautifulSoup
 
 @st.cache_data(show_spinner=False)
 def bundled_corporations() -> pd.DataFrame:
@@ -316,15 +318,34 @@ st.dataframe(pd.DataFrame([
 
 st.markdown("### 4. 핵심감사사항과 기업 관련 뉴스")
 if real_mode:
-    st.markdown("#### 최근 5개년 핵심감사사항(KAM) 확인")
-    st.caption("KAM은 감사보고서 원문에서 확인해야 합니다. 현재 자동 추출·요약은 제공하지 않으며, 아래 사업보고서 원문에서 감사보고서를 확인할 수 있습니다. KAM이 없는 보고서도 있습니다.")
-    receipts = fin[["year", "receipt"]].drop_duplicates().sort_values("year", ascending=False).head(5)
-    for _, report in receipts.iterrows():
-        receipt = str(report["receipt"])
-        if receipt.isdigit() and len(receipt) == 14:
-            st.markdown(f"- [{int(report['year'])}년 사업보고서 · 감사보고서 원문](https://dart.fss.or.kr/dsaf001/main.do?rcpNo={receipt})")
+    st.markdown("#### 최근 5개년 핵심감사사항(KAM)")
+    st.caption("DART 감사보고서 원문을 자동 검색해 핵심감사사항 구간을 발췌합니다. 추출이 불완전할 수 있으므로 반드시 원문과 대조하세요.")
+    @st.cache_data(ttl=86400, show_spinner=False)
+    def cached_kam(api_key: str, corp_code: str, report_year: int):
+        return fetch_kam(api_key, corp_code, report_year)
+    if st.button("📑 5개년 감사보고서에서 KAM 추출", key="kam_fetch"):
+        if not api_key.strip():
+            st.warning("DART 인증키를 입력해 주세요.")
+        else:
+            years_to_check = sorted(fin["year"].astype(int).unique(), reverse=True)[:5]
+            with st.spinner("감사보고서 원문을 확인하고 있습니다..."):
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    kam_results = list(executor.map(lambda y: cached_kam(api_key.strip(), selected_code or st.session_state.get("last_corp_code", ""), y), years_to_check))
+            st.session_state["kam_results"] = {"company": company, "items": kam_results}
+    if selected_code:
+        st.session_state["last_corp_code"] = selected_code
+    saved_kam = st.session_state.get("kam_results", {})
+    if saved_kam.get("company") == company:
+        for item in saved_kam["items"]:
+            with st.container(border=True):
+                st.markdown(f"**{item['year']}년 감사보고서**")
+                st.caption(item.get("status", ""))
+                if item.get("excerpt"):
+                    st.write(item["excerpt"])
+                if item.get("url"):
+                    st.link_button("DART 원문 대조", item["url"])
     st.markdown("#### 기업 관련 최근 뉴스")
-    st.caption("외부 뉴스 RSS에서 가져온 기사 제목과 게시일입니다. 기사 본문을 검증한 요약이나 감사위험 판정은 아닙니다.")
+    st.caption("최근 90일 뉴스 · 출처와 게시일, RSS 제공 미리보기. 기사 본문 전체를 분석한 AI 요약은 아닙니다.")
     @st.cache_data(ttl=3600, show_spinner=False)
     def recent_news(company_name: str):
         url = "https://news.google.com/rss/search?q=" + quote_plus('"' + company_name + '" when:90d') + "&hl=ko&gl=KR&ceid=KR:ko"
@@ -336,19 +357,30 @@ if real_mode:
             title = item.findtext("title") or ""
             link = item.findtext("link") or ""
             date = item.findtext("pubDate") or ""
+            snippet = BeautifulSoup(item.findtext("description") or "", "html.parser").get_text(" ", strip=True)
             if title and link.startswith("https://"):
-                rows.append((title, link, date))
+                rows.append({"title": title, "link": link, "date": date, "snippet": snippet[:230]})
         return rows
-    if st.button("📰 최근 90일 뉴스 불러오기", key="load_news"):
+    if st.button("📰 최근 90일 뉴스 새로고침", key="load_news"):
         try:
-            articles = recent_news(company)
-            if not articles:
-                st.info("조회된 뉴스가 없습니다.")
-            for title, link, date in articles:
-                st.markdown(f"- [{title}]({link})")
-                st.caption(date)
+            st.session_state["news_results"] = {"company": company, "items": recent_news(company)}
         except (requests.RequestException, ET.ParseError):
             st.warning("뉴스 서비스에 연결할 수 없습니다. 잠시 후 다시 시도하세요.")
+    news_saved = st.session_state.get("news_results", {})
+    if news_saved.get("company") == company:
+        articles = news_saved["items"]
+        if not articles:
+            st.info("조회된 뉴스가 없습니다.")
+        for idx in range(0, len(articles), 2):
+            cols = st.columns(2)
+            for col, article in zip(cols, articles[idx:idx+2]):
+                with col:
+                    with st.container(border=True):
+                        st.caption("📰  " + article["date"][:22])
+                        st.markdown("**" + article["title"] + "**")
+                        if article["snippet"]:
+                            st.caption(article["snippet"])
+                        st.link_button("기사 원문 보기", article["link"])
 else:
     st.info("KAM과 뉴스는 실제 DART 조회 모드에서만 확인할 수 있습니다.")
 
