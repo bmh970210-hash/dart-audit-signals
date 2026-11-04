@@ -273,8 +273,7 @@ with st.expander("비율의 의미와 변동 시 감사 검토사항", expanded=
     for label in ratio_cols:
         if label in ratio_guide:
             meaning, risk = ratio_guide[label]
-            st.markdown(f"**{label}** — {meaning}  
-↳ **확인할 사항:** {risk}")
+            st.markdown(f"**{label}** — {meaning}  " + chr(10) + f"↳ **확인할 사항:** {risk}")
 if ratio_cols:
     st.dataframe(summary[["연도"] + ratio_cols].style.format(precision=1, thousands=",", na_rep="-"), use_container_width=True, hide_index=True)
     ratio_metric = st.selectbox("추세로 볼 증감률 또는 비율", ratio_cols, key="ratio_metric")
