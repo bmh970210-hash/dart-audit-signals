@@ -221,7 +221,7 @@ if amount_cols:
                     axis=alt.Axis(format=",.1f"), title=metric),
             tooltip=[alt.Tooltip("연도:N"), alt.Tooltip(f"{metric}:Q", format=",.1f")]
         ).properties(height=320)
-        st.altair_chart(plot, use_container_width=True)
+        st.altair_chart(plot + alt.Chart(chart).mark_text(dy=-15, fontSize=13, fontWeight="bold", color="#7C3AED").encode(x=alt.X("연도:N", sort=list(chart["연도"])), y=alt.Y(f"{metric}:Q", scale=alt.Scale(domain=[ymin, ymax], zero=False)), text=alt.Text(f"{metric}:Q", format=",.1f")), use_container_width=True)
         st.caption(f"세로축은 실제 관측값 {lo:,.1f}~{hi:,.1f}억원에 맞춰 자동 조정됩니다. 축이 0에서 시작하지 않을 수 있으므로 변동폭은 수치와 함께 판단하세요.")
         st.dataframe(chart.style.format({metric: "{:,.1f}"}), use_container_width=True, hide_index=True)
     else:
@@ -256,17 +256,26 @@ if ratio_cols:
                     axis=alt.Axis(format=",.1f"), title=ratio_metric),
             tooltip=[alt.Tooltip("연도:N"), alt.Tooltip(f"{ratio_metric}:Q", format=",.1f")]
         ).properties(height=260)
-        st.altair_chart(ratio_plot, use_container_width=True)
+        st.altair_chart(ratio_plot + alt.Chart(ratio_chart).mark_text(dy=-15, fontSize=13, fontWeight="bold", color="#7C3AED").encode(x=alt.X("연도:N", sort=list(ratio_chart["연도"])), y=alt.Y(f"{ratio_metric}:Q", scale=alt.Scale(domain=[low-margin, high+margin], zero=False)), text=alt.Text(f"{ratio_metric}:Q", format=",.1f")), use_container_width=True)
 
 st.markdown("### 3. 이상징후와 감사 대응")
 if flag_table.empty:
-    st.info("사전 설정한 규칙에 해당하는 이상징후가 발견되지 않았습니다. 이는 재무정보가 정상임을 보증하지 않습니다.")
+    st.info("6개 정량 규칙에 해당하는 이상징후가 없습니다. 이는 재무정보가 정상임을 보증하지 않습니다. 아래 기본 감사 검토사항도 참고하세요.")
 else:
     st.warning(f"총 {len(flag_table)}건의 규칙 기반 이상징후가 발견됐습니다. (감사의견이나 부정 판정 아님)")
     st.dataframe(flag_table[["연도", "등급", "이상징후", "탐지 근거", "연결 감사주장", "추가 검토사항"]],
                  use_container_width=True, hide_index=True)
     with st.expander("탐지 규칙 상세"):
         st.dataframe(flag_table[["연도", "이상징후", "규칙"]], hide_index=True, use_container_width=True)
+
+st.markdown("#### 기본 감사 검토사항")
+st.caption("탐지 결과와 무관하게 제공하는 일반적인 감사 계획 참고사항이며, 실제 수행된 감사절차가 아닙니다.")
+st.dataframe(pd.DataFrame([
+    {"검토 영역": "매출액", "감사주장": "발생사실 · 기간귀속", "추가 검토": "기말 전후 매출계약, 인도증빙, 반품 확인"},
+    {"검토 영역": "매출채권", "감사주장": "실재성 · 평가", "추가 검토": "거래처 조회, 채권 연령분석, 후속 입금 확인"},
+    {"검토 영역": "재고자산", "감사주장": "실재성 · 평가", "추가 검토": "재고실사, 장기체화, 순실현가능가치 검토"},
+    {"검토 영역": "영업현금흐름", "감사주장": "표시 · 분류", "추가 검토": "운전자본 변동, 영업이익과의 차이 분석"},
+]), hide_index=True, use_container_width=True)
 
 st.markdown("### 4. 근거 자료와 결과 내려받기")
 with st.expander("DART 원본 계정 매핑 확인", expanded=False):
