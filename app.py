@@ -361,11 +361,13 @@ if real_mode:
             if title and link.startswith("https://"):
                 rows.append({"title": title, "link": link, "date": date, "snippet": snippet[:230]})
         return rows
-    if st.button("📰 최근 90일 뉴스 새로고침", key="load_news"):
+    if st.session_state.get("news_results", {}).get("company") != company:
         try:
-            st.session_state["news_results"] = {"company": company, "items": recent_news(company)}
+            with st.spinner("최근 기업 뉴스 확인 중..."):
+                st.session_state["news_results"] = {"company": company, "items": recent_news(company)}
         except (requests.RequestException, ET.ParseError):
-            st.warning("뉴스 서비스에 연결할 수 없습니다. 잠시 후 다시 시도하세요.")
+            st.session_state["news_results"] = {"company": company, "items": []}
+            st.caption("뉴스 서비스를 일시적으로 조회할 수 없습니다.")
     news_saved = st.session_state.get("news_results", {})
     if news_saved.get("company") == company:
         articles = news_saved["items"]
