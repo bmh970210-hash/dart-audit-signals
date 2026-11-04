@@ -5,6 +5,7 @@ from io import BytesIO
 from zipfile import ZipFile, BadZipFile
 import xml.etree.ElementTree as ET
 import time
+import random
 from difflib import get_close_matches
 
 import pandas as pd
@@ -27,16 +28,17 @@ def _request(url: str, params: dict) -> requests.Response:
     """
     endpoint = ("회사목록" if url.endswith("/corpCode.xml") else
                 "회사정보" if url.endswith("/company.json") else "재무제표")
-    timeout = (CONNECT_TIMEOUT, READ_TIMEOUT if endpoint == "회사목록" else 12)
-    for attempt in range(2 if endpoint == "회사목록" else 1):
+    timeout = (CONNECT_TIMEOUT, READ_TIMEOUT if endpoint == "회사목록" else 30)
+    max_attempts = 2 if endpoint == "회사목록" else 3
+    for attempt in range(max_attempts):
         try:
             response = requests.get(url, params=params, timeout=timeout)
             response.raise_for_status()
             return response
         except requests.exceptions.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else None
-            if status in (500, 502, 503, 504) and attempt == 0 and endpoint == "회사목록":
-                time.sleep(0.5)
+            if status in (429, 500, 502, 503, 504) and attempt < max_attempts - 1:
+                time.sleep(0.8 * (attempt + 1))
                 continue
             if status == 403:
                 detail = "접근 거부(HTTP 403). 클라우드 서버 IP의 접근 제한 가능성이 있습니다."
@@ -50,15 +52,15 @@ def _request(url: str, params: dict) -> requests.Response:
                 f"DART {endpoint} 연결 실패(SSL 인증서 오류). 서버 인증서 검증에 문제가 있습니다."
             ) from None
         except requests.exceptions.Timeout:
-            if attempt == 0 and endpoint == "회사목록":
-                time.sleep(0.5)
+            if attempt < max_attempts - 1:
+                time.sleep(0.8 * (attempt + 1))
                 continue
             raise DartError(
                 f"DART {endpoint} 연결 시간초과. 클라우드 서버에서 DART에 접속하지 못하거나 응답이 지연됩니다."
             ) from None
         except requests.exceptions.ConnectionError:
-            if attempt == 0:
-                time.sleep(0.5)
+            if attempt < max_attempts - 1:
+                time.sleep(0.8 * (attempt + 1))
                 continue
             raise DartError(
                 f"DART {endpoint} 연결 오류. 클라우드 호스팅 IP 또는 DART의 네트워크 연결이 제한되었을 수 있습니다."
