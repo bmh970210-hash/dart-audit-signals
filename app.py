@@ -35,7 +35,7 @@ def cached_corporations(api_key: str) -> pd.DataFrame:
     return get_corporations(api_key)
 
 
-@st.cache_data(ttl=60 * 60, show_spinner=False)
+@st.cache_data(ttl=24 * 60 * 60, max_entries=2000, show_spinner=False)
 def cached_annual_statement(api_key: str, corp_code: str, year: int, fs_div: str):
     return get_annual_statement(api_key, corp_code, year, fs_div)
 
@@ -103,7 +103,7 @@ else:
     selection_label = st.radio("재무제표", ["연결재무제표(CFS)", "별도재무제표(OFS)"], horizontal=True,
                                help="연도별 연결/별도 혼용을 금지합니다. 연결 자료가 없으면 별도로 재조회하세요.")
     selection = "CFS" if selection_label.startswith("연결") else "OFS"
-    st.caption("회사명을 입력하면 후보를 자동 추천합니다. 별도의 회사목록 다운로드 버튼은 없습니다.")
+    st.caption("상장·상장폐지 기업 약 4천 곳은 서버에 저장되어 즉시 검색됩니다. 비상장기업은 별도 전체 검색을 지원합니다.")
     keyword = st.text_input("회사명 / 종목코드", placeholder="예: 삼성전자 또는 005930")
     companies = bundled_corporations()
     if companies.empty:
@@ -116,6 +116,17 @@ else:
                 st.session_state["corp_registry"] = companies
         except DartError as exc:
             st.warning(f"회사명 검색을 준비하지 못했습니다: {exc}")
+    if not companies.empty and len(keyword.strip()) >= 2 and api_key.strip():
+        # Full DART directory is optional: listed/delisted names search instantly from bundled CSV.
+        if st.button("검색 결과에 없는 비상장회사 찾기 (전체 회사목록 최초 1회 조회)", key="full_registry"):
+            try:
+                with st.spinner("비상장회사 전체 목록 조회 중..."):
+                    st.session_state["corp_registry"] = cached_corporations(api_key.strip())
+                    companies = st.session_state["corp_registry"]
+            except DartError as exc:
+                st.warning(f"전체 회사목록 조회 실패: {exc}")
+        if "corp_registry" in st.session_state:
+            companies = st.session_state["corp_registry"]
     selected_code = None
     if direct_company:
         selected_code = direct_company["corp_code"]
