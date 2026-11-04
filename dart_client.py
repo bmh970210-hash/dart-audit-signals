@@ -5,6 +5,7 @@ from io import BytesIO
 from zipfile import ZipFile, BadZipFile
 import xml.etree.ElementTree as ET
 import time
+from difflib import get_close_matches
 
 import pandas as pd
 import requests
@@ -124,6 +125,10 @@ def find_corporations(corporations: pd.DataFrame, query: str, limit: int = 40) -
     match = (corporations["corp_name"].str.contains(query, case=False, regex=False, na=False)
              | corporations["stock_code"].eq(query))
     result = corporations.loc[match].copy()
+    if result.empty:
+        names = corporations["corp_name"].dropna().unique().tolist()
+        suggestions = get_close_matches(query, names, n=limit, cutoff=0.48)
+        result = corporations.loc[corporations["corp_name"].isin(suggestions)].copy()
     result["_exact"] = result["corp_name"].str.lower().eq(query.lower()) | result["stock_code"].eq(query)
     result["_listed"] = result["stock_code"].str.len().eq(6)
     return result.sort_values(["_exact", "_listed", "corp_name"], ascending=[False, False, True]).head(limit).drop(columns=["_exact", "_listed"])
