@@ -30,7 +30,7 @@ def bundled_corporations() -> pd.DataFrame:
     return pd.read_csv(path, dtype=str, encoding="utf-8-sig").fillna("")
 
 
-@st.cache_data(ttl=24 * 3600, show_spinner=False)
+@st.cache_resource(show_spinner=False)
 def cached_corporations(api_key: str) -> pd.DataFrame:
     return get_corporations(api_key)
 
