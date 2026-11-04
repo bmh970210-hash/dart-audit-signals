@@ -136,7 +136,7 @@ else:
                 selected_code = selected.corp_code
                 company = selected.corp_name
                 st.success(f"선택 완료: {company}")
-    if st.button("🔎 재무정보 분석 실행", type="primary", disabled=not (bool(selected_code) and bool(api_key.strip()))):
+    if selected_code:\n        st.session_state["selected_corp_code"] = selected_code\n    if st.button("🔎 재무정보 분석 실행", type="primary", disabled=not (bool(selected_code) and bool(api_key.strip()))):
         result = {}
         errors = []
         progress = st.progress(0, text="재무제표 수집 준비 중")
@@ -168,7 +168,7 @@ else:
                     st.error(error)
         if result:
             st.session_state["analysis_result"] = {
-                "company": company, "fs_div": selection, "year": year,
+                "company": company, "corp_code": selected_code, "fs_div": selection, "year": year,
                 "period": n_years, "annual": result, "warnings": warnings + errors,
             }
         else:
@@ -331,10 +331,10 @@ if real_mode:
             years_to_check = sorted(fin["year"].astype(int).unique(), reverse=True)[:5]
             with st.spinner("감사보고서 원문을 확인하고 있습니다..."):
                 with ThreadPoolExecutor(max_workers=2) as executor:
-                    kam_results = list(executor.map(lambda y: cached_kam(api_key.strip(), selected_code or st.session_state.get("last_corp_code", ""), y), years_to_check))
+                    kam_results = list(executor.map(lambda y: cached_kam(api_key.strip(), saved.get("corp_code") or selected_code or st.session_state.get("last_corp_code", ""), y), years_to_check))
             st.session_state["kam_results"] = {"company": company, "items": kam_results}
-    if selected_code:
-        st.session_state["last_corp_code"] = selected_code
+    if saved and saved.get("corp_code"):
+        st.session_state["last_corp_code"] = saved["corp_code"]
     saved_kam = st.session_state.get("kam_results", {})
     if saved_kam.get("company") == company:
         for item in saved_kam["items"]:
@@ -346,8 +346,8 @@ if real_mode:
                 if item.get("url"):
                     st.link_button("DART 원문 대조", item["url"])
     st.markdown("#### 기업 관련 최근 뉴스")
-    ai_key = st.text_input("AI 기사 요약용 OpenAI API 키 (선택)", type="password", value=st.secrets.get("OPENAI_API_KEY", ""), help="ChatGPT 구독과 별개의 API 키입니다. 입력하지 않으면 기사 원문 AI 요약은 비활성화됩니다.")
-    st.caption("최근 90일 뉴스. 원문 접근이 가능한 기사에 한해 AI 요약을 생성합니다. 요약은 원문과 대조하세요.")
+
+    st.caption("최근 90일 뉴스 · 무료 원문 기반 핵심문장 추출 요약 (생성형 AI 아님). 원문 접근이 가능한 기사만 요약합니다.")
     @st.cache_data(ttl=3600, show_spinner=False)
     def recent_news(company_name: str):
         url = "https://news.google.com/rss/search?q=" + quote_plus('"' + company_name + '" when:90d') + "&hl=ko&gl=KR&ceid=KR:ko"
@@ -387,17 +387,17 @@ if real_mode:
                         st.link_button("기사 원문 보기", article["link"])
                         summary_key = (company, article["link"])
                         if summary_key in st.session_state.get("article_summaries", {}):
-                            st.markdown("**AI 기사 요약**")
+                            st.markdown("**기사 핵심문장 요약 · 무료**")
                             st.write(st.session_state["article_summaries"][summary_key])
-                        if st.button("✨ 기사 원문 AI 요약", key="sum_" + str(idx) + "_" + str(articles.index(article)), disabled=not bool(ai_key.strip())):
+                        if st.button("✨ 무료 기사 요약", key="sum_" + str(idx) + "_" + str(articles.index(article))):
                             try:
                                 with st.spinner("기사 원문을 읽고 요약 중..."):
                                     body = extract_article(article["link"])
-                                    summary_text = summarize_article(ai_key.strip(), article["title"], body)
+                                    summary_text = summarize_article(article["title"], body)
                                 st.session_state.setdefault("article_summaries", {})[summary_key] = summary_text
                                 st.rerun()
                             except (ValueError, requests.RequestException, KeyError, IndexError) as exc:
-                                st.warning("기사 원문을 읽거나 AI 요약을 생성하지 못했습니다. 뉴스 중계 링크·언론사 접근 제한 또는 API 키/요금 상태를 확인하세요.")
+                                st.warning("기사 원문을 읽거나 AI 요약을 생성하지 못했습니다. 뉴스 중계 링크나 언론사 접근 제한 여부를 확인하세요.")
 else:
     st.info("KAM과 뉴스는 실제 DART 조회 모드에서만 확인할 수 있습니다.")
 
