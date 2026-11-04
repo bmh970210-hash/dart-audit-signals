@@ -155,7 +155,7 @@ else:
         progress = st.progress(0, text="재무제표 수집 준비 중")
         years = list(range(year - n_years + 1, year + 1))
         started = monotonic()
-        with ThreadPoolExecutor(max_workers=min(2, len(years))) as pool:
+        with ThreadPoolExecutor(max_workers=min(3, len(years))) as pool:
             futures = {
                 pool.submit(cached_annual_statement, api_key.strip(), selected_code, y, selection): y
                 for y in years
