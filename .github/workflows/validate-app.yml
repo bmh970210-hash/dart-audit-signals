@@ -1,0 +1,32 @@
+name: Validate Streamlit app
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install app dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Compile every Python source file
+        run: python -m compileall -q .
+      - name: Import app modules
+        run: python -c "import analysis, dart_client, news_ai, kam, sample_data"
+      - name: Run Streamlit sample-mode smoke test
+        run: |
+          python - <<'PY'
+          from streamlit.testing.v1 import AppTest
+          app = AppTest.from_file("app.py", default_timeout=45).run()
+          if app.exception:
+              raise RuntimeError(str([str(e.message) for e in app.exception]))
+          print("Streamlit app started without exceptions")
+          PY
