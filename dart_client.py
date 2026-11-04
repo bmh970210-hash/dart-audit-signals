@@ -5,7 +5,6 @@ from io import BytesIO
 from zipfile import ZipFile, BadZipFile
 import xml.etree.ElementTree as ET
 import time
-import random
 from difflib import get_close_matches
 
 import pandas as pd
@@ -23,13 +22,13 @@ class DartError(Exception):
 def _request(url: str, params: dict) -> requests.Response:
     """Request OpenDART and report safe diagnostics without exposing API keys.
 
-    Timeout/transient server failures get one retry. Never include the underlying
+    Timeout/transient server failures get bounded retries. Never include the underlying
     requests exception or full URL in UI messages: both may contain crtfc_key.
     """
     endpoint = ("회사목록" if url.endswith("/corpCode.xml") else
                 "회사정보" if url.endswith("/company.json") else "재무제표")
-    timeout = (CONNECT_TIMEOUT, READ_TIMEOUT if endpoint == "회사목록" else 30)
-    max_attempts = 2 if endpoint == "회사목록" else 3
+    timeout = (CONNECT_TIMEOUT, READ_TIMEOUT if endpoint == "회사목록" else 12)
+    max_attempts = 2
     for attempt in range(max_attempts):
         try:
             response = requests.get(url, params=params, timeout=timeout)
