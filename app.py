@@ -6,6 +6,8 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from time import monotonic
 from urllib.parse import quote_plus
+from html import escape, unescape
+import re
 import xml.etree.ElementTree as ET
 import requests
 
@@ -98,24 +100,19 @@ else:
     selection_label = st.radio("재무제표", ["연결재무제표(CFS)", "별도재무제표(OFS)"], horizontal=True,
                                help="연도별 연결/별도 혼용을 금지합니다. 연결 자료가 없으면 별도로 재조회하세요.")
     selection = "CFS" if selection_label.startswith("연결") else "OFS"
-    st.caption("회사목록이 사전에 준비되어 있으면 다운로드 없이 즉시 검색됩니다. 삼성전자·005930·DART 고유번호 8자리는 사전 파일 없이도 조회 가능합니다.")
+    st.caption("회사명을 입력하면 후보를 자동 추천합니다. 별도의 회사목록 다운로드 버튼은 없습니다.")
     keyword = st.text_input("회사명 / 종목코드", placeholder="예: 삼성전자 또는 005930")
     companies = bundled_corporations()
     if companies.empty:
         companies = st.session_state.get("corp_registry", pd.DataFrame())
     direct_company = lookup_without_registry(keyword)
-    if companies.empty and not direct_company and len(keyword.strip()) >= 2:
-        st.caption("회사코드 사전 파일이 아직 준비되지 않았습니다. 최초 한 번 다운로드하거나 GitHub Actions에서 회사목록을 생성하세요.")
-        if st.button("회사목록 최초 불러오기", key="corp_search"):
-            if not api_key.strip():
-                st.warning("OpenDART 인증키를 먼저 입력하세요.")
-            else:
-                try:
-                    with st.spinner("회사목록 최초 다운로드 중..."):
-                        companies = cached_corporations(api_key.strip())
-                        st.session_state["corp_registry"] = companies
-                except DartError as exc:
-                    st.error(str(exc))
+    if companies.empty and not direct_company and len(keyword.strip()) >= 2 and api_key.strip():
+        try:
+            with st.spinner("회사코드 사전 준비 중 (최초 서버 시작 시 1회)..."):
+                companies = cached_corporations(api_key.strip())
+                st.session_state["corp_registry"] = companies
+        except DartError as exc:
+            st.warning(f"회사명 검색을 준비하지 못했습니다: {exc}")
     selected_code = None
     if direct_company:
         selected_code = direct_company["corp_code"]
@@ -288,7 +285,17 @@ if ratio_cols:
         ).properties(height=260)
         st.altair_chart(ratio_plot + alt.Chart(ratio_chart).mark_text(dy=-15, fontSize=13, fontWeight="bold", color="#7C3AED").encode(x=alt.X("연도:N", sort=list(ratio_chart["연도"])), y=alt.Y(f"{ratio_metric}:Q", scale=alt.Scale(domain=[low-margin, high+margin], zero=False)), text=alt.Text(f"{ratio_metric}:Q", format=",.1f")), use_container_width=True)
 
+RULES = [
+    ("R01", "매출 급증", "매출 전년 대비 증가율 ≥ 30%", "발생사실 · 기간귀속", "기말 매출 계약·출고·반품 및 Cut-off 검토"),
+    ("R02", "매출채권 과다 증가", "매출채권 증가율 − 매출 증가율 ≥ 20%p", "실재성 · 평가", "채권조회·후속입금·대손충당금 검토"),
+    ("R03", "채권 회수기간 증가", "(매출채권÷매출×365) 전년 대비 ≥ 20일 증가", "평가 · 실재성", "장기 미회수채권·회수가능성 검토"),
+    ("R04", "재고자산 과다 증가", "재고 증가율 − 매출 증가율 ≥ 20%p", "실재성 · 평가", "재고실사·체화·순실현가능가치 검토"),
+    ("R05", "이익과 현금흐름 괴리", "영업이익 > 0, 영업현금흐름 < 0", "발생사실 · 기간귀속", "운전자본 변동·영업현금흐름 조정 검토"),
+    ("R06", "현금흐름 적자 전환", "매출 증가 + 영업현금흐름 양수→음수", "발생사실 · 평가", "매출채권 회수·현금흐름 분류 검토"),
+]
 st.markdown("### 3. 이상징후와 감사 대응")
+st.caption("적용한 6개 규칙과 기준값을 탐지 결과와 관계없이 공개합니다. 기준값은 연구용으로 설정한 값이며 감사기준서의 공식 임계값이 아닙니다.")
+st.dataframe(pd.DataFrame(RULES, columns=["코드", "점검 항목", "탐지 기준", "관련 감사주장", "검토 방향"]), hide_index=True, use_container_width=True)
 if flag_table.empty:
     st.info("6개 정량 규칙에 해당하는 이상징후가 없습니다. 이는 재무정보가 정상임을 보증하지 않습니다. 아래 기본 감사 검토사항도 참고하세요.")
 else:
