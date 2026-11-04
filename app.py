@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from time import monotonic
 from urllib.parse import quote_plus
 import xml.etree.ElementTree as ET
 import requests
@@ -87,7 +89,7 @@ else:
     selection_label = st.radio("재무제표", ["연결재무제표(CFS)", "별도재무제표(OFS)"], horizontal=True,
                                help="연도별 연결/별도 혼용을 금지합니다. 연결 자료가 없으면 별도로 재조회하세요.")
     selection = "CFS" if selection_label.startswith("연결") else "OFS"
-    st.caption("삼성전자, 005930 또는 DART 고유번호 8자리를 입력하면 대용량 회사목록 다운로드를 생략합니다. 다른 회사명은 기존 검색을 사용합니다.")
+    st.caption("삼성전자·005930·DART 고유번호 8자리는 회사목록 다운로드 없이 바로 조회합니다. 일반 회사명은 최초 1회 전체 목록이 필요하며, 이후 캐시를 사용합니다.")
     keyword = st.text_input("회사명 / 종목코드", placeholder="예: 삼성전자 또는 005930")
     companies = pd.DataFrame()
     direct_company = lookup_without_registry(keyword)
@@ -123,16 +125,25 @@ else:
         errors = []
         progress = st.progress(0, text="재무제표 수집 준비 중")
         years = list(range(year - n_years + 1, year + 1))
-        for idx, y in enumerate(years):
-            progress.progress(idx / len(years), text=f"{y}년 사업보고서 조회 중 ({idx + 1}/{len(years)})")
-            try:
-                lines, receipt = cached_annual_statement(api_key.strip(), selected_code, y, selection)
-                if lines:
-                    result[y] = (lines, receipt)
-                else:
-                    warnings.append(f"{y}년 {selection} 사업보고서 재무정보 없음 (결측 처리)")
-            except DartError as exc:
-                errors.append(f"{y}년 조회 실패: {exc}")
+        started = monotonic()
+        with ThreadPoolExecutor(max_workers=min(5, len(years))) as pool:
+            futures = {
+                pool.submit(cached_annual_statement, api_key.strip(), selected_code, y, selection): y
+                for y in years
+            }
+            for completed, future in enumerate(as_completed(futures), 1):
+                y = futures[future]
+                try:
+                    lines, receipt = future.result()
+                    if lines:
+                        result[y] = (lines, receipt)
+                    else:
+                        warnings.append(f"{y}년 {selection} 사업보고서 재무정보 없음 (결측 처리)")
+                except DartError as exc:
+                    errors.append(f"{y}년 조회 실패: {exc}")
+                except Exception:
+                    errors.append(f"{y}년 조회 실패: 예기치 않은 처리 오류 (API 키 등 민감정보는 표시하지 않음)")
+                progress.progress(completed / len(years), text=f"{completed}/{len(years)}개 연도 응답 완료 · {monotonic()-started:.0f}초 경과")
         progress.empty()
         if errors:
             st.warning("일부 연도의 DART 요청이 실패했습니다. 실패 연도는 분석에서 제외합니다.")
