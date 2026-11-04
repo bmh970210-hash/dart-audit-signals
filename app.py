@@ -19,6 +19,7 @@ from analysis import add_ratios, build_financials, detect_flags, flags_as_frame,
 from dart_client import DartError, find_corporations, get_annual_statement, get_corporations, lookup_without_registry
 from sample_data import make_sample_annual
 from kam import fetch_kam
+from news_ai import extract_article, summarize_article
 from bs4 import BeautifulSoup
 
 @st.cache_data(show_spinner=False)
@@ -345,7 +346,8 @@ if real_mode:
                 if item.get("url"):
                     st.link_button("DART 원문 대조", item["url"])
     st.markdown("#### 기업 관련 최근 뉴스")
-    st.caption("최근 90일 뉴스 · 출처와 게시일, RSS 제공 미리보기. 기사 본문 전체를 분석한 AI 요약은 아닙니다.")
+    ai_key = st.text_input("AI 기사 요약용 OpenAI API 키 (선택)", type="password", value=st.secrets.get("OPENAI_API_KEY", ""), help="ChatGPT 구독과 별개의 API 키입니다. 입력하지 않으면 기사 원문 AI 요약은 비활성화됩니다.")
+    st.caption("최근 90일 뉴스. 원문 접근이 가능한 기사에 한해 AI 요약을 생성합니다. 요약은 원문과 대조하세요.")
     @st.cache_data(ttl=3600, show_spinner=False)
     def recent_news(company_name: str):
         url = "https://news.google.com/rss/search?q=" + quote_plus('"' + company_name + '" when:90d') + "&hl=ko&gl=KR&ceid=KR:ko"
@@ -383,6 +385,19 @@ if real_mode:
                         if article["snippet"]:
                             st.caption(article["snippet"])
                         st.link_button("기사 원문 보기", article["link"])
+                        summary_key = (company, article["link"])
+                        if summary_key in st.session_state.get("article_summaries", {}):
+                            st.markdown("**AI 기사 요약**")
+                            st.write(st.session_state["article_summaries"][summary_key])
+                        if st.button("✨ 기사 원문 AI 요약", key="sum_" + str(idx) + "_" + str(articles.index(article)), disabled=not bool(ai_key.strip())):
+                            try:
+                                with st.spinner("기사 원문을 읽고 요약 중..."):
+                                    body = extract_article(article["link"])
+                                    summary_text = summarize_article(ai_key.strip(), article["title"], body)
+                                st.session_state.setdefault("article_summaries", {})[summary_key] = summary_text
+                                st.rerun()
+                            except (ValueError, requests.RequestException, KeyError, IndexError) as exc:
+                                st.warning("기사 원문을 읽거나 AI 요약을 생성하지 못했습니다. 뉴스 중계 링크·언론사 접근 제한 또는 API 키/요금 상태를 확인하세요.")
 else:
     st.info("KAM과 뉴스는 실제 DART 조회 모드에서만 확인할 수 있습니다.")
 
