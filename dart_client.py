@@ -126,7 +126,10 @@ def find_corporations(corporations: pd.DataFrame, query: str, limit: int = 40) -
              | corporations["stock_code"].eq(query))
     result = corporations.loc[match].copy()
     if result.empty:
-        names = corporations["corp_name"].dropna().unique().tolist()
+        # Avoid fuzzy-comparing every registered corporation on each keystroke.
+        names = corporations.loc[corporations["corp_name"].str[:1].str.lower().eq(query[:1].lower()), "corp_name"].dropna().unique().tolist()
+        if len(names) > 2000:
+            names = [n for n in names if query[:2].lower() in n.lower()][:2000]
         suggestions = get_close_matches(query, names, n=limit, cutoff=0.48)
         result = corporations.loc[corporations["corp_name"].isin(suggestions)].copy()
     result["_exact"] = result["corp_name"].str.lower().eq(query.lower()) | result["stock_code"].eq(query)
