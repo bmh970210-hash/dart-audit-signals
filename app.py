@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from urllib.parse import quote_plus
+import xml.etree.ElementTree as ET
+import requests
 
 import pandas as pd
 import altair as alt
@@ -277,7 +280,45 @@ st.dataframe(pd.DataFrame([
     {"검토 영역": "영업현금흐름", "감사주장": "표시 · 분류", "추가 검토": "운전자본 변동, 영업이익과의 차이 분석"},
 ]), hide_index=True, use_container_width=True)
 
-st.markdown("### 4. 근거 자료와 결과 내려받기")
+st.markdown("### 4. 핵심감사사항과 기업 관련 뉴스")
+if real_mode:
+    st.markdown("#### 최근 5개년 핵심감사사항(KAM) 확인")
+    st.caption("KAM은 감사보고서 원문에서 확인해야 합니다. 현재 자동 추출·요약은 제공하지 않으며, 아래 사업보고서 원문에서 감사보고서를 확인할 수 있습니다. KAM이 없는 보고서도 있습니다.")
+    receipts = fin[["year", "receipt"]].drop_duplicates().sort_values("year", ascending=False).head(5)
+    for _, report in receipts.iterrows():
+        receipt = str(report["receipt"])
+        if receipt.isdigit() and len(receipt) == 14:
+            st.markdown(f"- [{int(report['year'])}년 사업보고서 · 감사보고서 원문](https://dart.fss.or.kr/dsaf001/main.do?rcpNo={receipt})")
+    st.markdown("#### 기업 관련 최근 뉴스")
+    st.caption("외부 뉴스 RSS에서 가져온 기사 제목과 게시일입니다. 기사 본문을 검증한 요약이나 감사위험 판정은 아닙니다.")
+    @st.cache_data(ttl=3600, show_spinner=False)
+    def recent_news(company_name: str):
+        url = "https://news.google.com/rss/search?q=" + quote_plus('"' + company_name + '" when:90d') + "&hl=ko&gl=KR&ceid=KR:ko"
+        response = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+        response.raise_for_status()
+        root = ET.fromstring(response.content)
+        rows = []
+        for item in root.findall("./channel/item")[:8]:
+            title = item.findtext("title") or ""
+            link = item.findtext("link") or ""
+            date = item.findtext("pubDate") or ""
+            if title and link.startswith("https://"):
+                rows.append((title, link, date))
+        return rows
+    if st.button("📰 최근 90일 뉴스 불러오기", key="load_news"):
+        try:
+            articles = recent_news(company)
+            if not articles:
+                st.info("조회된 뉴스가 없습니다.")
+            for title, link, date in articles:
+                st.markdown(f"- [{title}]({link})")
+                st.caption(date)
+        except (requests.RequestException, ET.ParseError):
+            st.warning("뉴스 서비스에 연결할 수 없습니다. 잠시 후 다시 시도하세요.")
+else:
+    st.info("KAM과 뉴스는 실제 DART 조회 모드에서만 확인할 수 있습니다.")
+
+st.markdown("### 5. 근거 자료와 결과 내려받기")
 with st.expander("DART 원본 계정 매핑 확인", expanded=False):
     st.dataframe(origins, hide_index=True, use_container_width=True)
     if real_mode:
