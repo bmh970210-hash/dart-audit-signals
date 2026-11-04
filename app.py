@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from time import monotonic
 from urllib.parse import quote_plus
@@ -15,6 +16,14 @@ import streamlit as st
 from analysis import add_ratios, build_financials, detect_flags, flags_as_frame, numeric_summary
 from dart_client import DartError, find_corporations, get_annual_statement, get_corporations, lookup_without_registry
 from sample_data import make_sample_annual
+
+@st.cache_data(show_spinner=False)
+def bundled_corporations() -> pd.DataFrame:
+    path = Path(__file__).resolve().parent / "data" / "corporations.csv"
+    if not path.exists():
+        return pd.DataFrame()
+    return pd.read_csv(path, dtype=str, encoding="utf-8-sig").fillna("")
+
 
 @st.cache_data(ttl=24 * 3600, show_spinner=False)
 def cached_corporations(api_key: str) -> pd.DataFrame:
@@ -89,12 +98,14 @@ else:
     selection_label = st.radio("재무제표", ["연결재무제표(CFS)", "별도재무제표(OFS)"], horizontal=True,
                                help="연도별 연결/별도 혼용을 금지합니다. 연결 자료가 없으면 별도로 재조회하세요.")
     selection = "CFS" if selection_label.startswith("연결") else "OFS"
-    st.caption("삼성전자·005930·DART 고유번호 8자리는 회사목록 다운로드 없이 바로 조회합니다. 일반 회사명은 최초 1회 전체 목록이 필요하며, 이후 캐시를 사용합니다.")
+    st.caption("회사목록이 사전에 준비되어 있으면 다운로드 없이 즉시 검색됩니다. 삼성전자·005930·DART 고유번호 8자리는 사전 파일 없이도 조회 가능합니다.")
     keyword = st.text_input("회사명 / 종목코드", placeholder="예: 삼성전자 또는 005930")
-    companies = st.session_state.get("corp_registry", pd.DataFrame())
+    companies = bundled_corporations()
+    if companies.empty:
+        companies = st.session_state.get("corp_registry", pd.DataFrame())
     direct_company = lookup_without_registry(keyword)
     if companies.empty and not direct_company and len(keyword.strip()) >= 2:
-        st.caption("첫 검색 시에만 DART 회사목록을 받아옵니다. 이후에는 이름을 입력할 때마다 유사한 회사 후보가 즉시 표시됩니다.")
+        st.caption("회사코드 사전 파일이 아직 준비되지 않았습니다. 최초 한 번 다운로드하거나 GitHub Actions에서 회사목록을 생성하세요.")
         if st.button("회사목록 최초 불러오기", key="corp_search"):
             if not api_key.strip():
                 st.warning("OpenDART 인증키를 먼저 입력하세요.")
